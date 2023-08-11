@@ -150,16 +150,16 @@ function App() {
             <div>
               <Label>요리명 선택:</Label>
               {Array.from(searchedDishes.keys()).map((name, index) => (
-                <Label key={index}>
-                  <Input
-                    type="radio"
-                    name="selectedDish"
-                    value={name}
-                    checked={selectedDish === name}
-                    onChange={(e) => setSelectedDish(e.target.value)}
-                  />
+                <LabelWithInput
+                  key={index}
+                  type="radio"
+                  name="selectedDish"
+                  value={name}
+                  checked={selectedDish === name}
+                  onChange={(e) => setSelectedDish(e.target.value)}
+                >
                   {name}
-                </Label>
+                </LabelWithInput>
               ))}
             </div>
           )}
@@ -172,7 +172,7 @@ function App() {
           />
         )}
       </form>
-      {selectedDish && <h2>선택된 요리명: {selectedDish}</h2>}
+      {selectedDish && <Label>선택된 요리명: {selectedDish}</Label>}
       {recipe.length > 0 && (
         <div>
           {recipeIngredients.length > 0 && (
