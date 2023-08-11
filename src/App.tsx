@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Children } from "react";
 import axios from "axios";
 import { Button } from "./component/Atoms/Button";
 import { Input } from "./component/Atoms/Input";
@@ -7,6 +7,7 @@ import { LabelWithInput } from "./component/Molecules/LabelWithForm";
 import { IngredientItem } from "./component/Molecules/IngredientItem";
 import { countMatchesFromRecipe } from "./component/common/recipeUtils";
 import { Recipe, ApiResponse } from "./component/common/typeGroup";
+import { SearchMenu } from "./component/Organisms/SearchMenu";
 
 function App() {
   //const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
@@ -21,7 +22,6 @@ function App() {
     new Map()
   );
   const [recipeIngredients, setRecipeIngredients] = useState<string>("");
-
 
   const fetchDishNames = async () => {
     const url = `http://openapi.foodsafetykorea.go.kr/api/${cookrcpAPI}/COOKRCP01/json/1/50/RCP_PARTS_DTLS=${mainIngredient}`;
@@ -113,23 +113,25 @@ function App() {
   return (
     <div>
       <form onSubmit={handleRecipeSearch}>
-        <LabelWithInput
-          type="text"
-          value={mainIngredient}
-          onChange={(e) => setMainIngredient(e.target.value)}
-        >
-          우선 소비할 재료:
-        </LabelWithInput>
-        <LabelWithInput
-          type="text"
-          value={newFridgeIngredient}
-          onChange={(e) => setNewFridgeIngredient(e.target.value)}
-          onKeyUp={(e) => handleKeyUp(e)} // 엔터 키를 눌렀을 때 추가 기능이 작동
-        >
-          냉장고의 재료:
-        </LabelWithInput>
-        <Button onClick={(e) => handleFridgeIngredientSubmit(e)}>추가</Button>
-
+        <SearchMenu
+          mainIngredientProps={{
+            type: "text",
+            value: mainIngredient,
+            onChange: (e) => setMainIngredient(e.target.value),
+            children: "우선 소비할 재료:",
+          }}
+          newFridgeIngredientProps={{
+            type: "text",
+            value: newFridgeIngredient,
+            onChange: (e) => setNewFridgeIngredient(e.target.value),
+            onKeyUp: (e) => handleKeyUp(e),
+            children: "냉장고의 재료:",
+          }}
+          buttonProps={{
+            onClick: (e) => handleFridgeIngredientSubmit(e),
+            children: "추가",
+          }}
+        />
         <ul>
           {fridgeIngredients.map((ingredient, index) => (
             // TODO: key는 추후 변경필요
