@@ -1,109 +1,97 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { Button } from "./component/Atoms/Button";
+import { Input } from "./component/Atoms/Input";
+import { Label, Text } from "./component/Atoms/Text";
+import { LabelWithInput } from "./component/Molecules/LabelWithForm";
+import { IngredientItem } from "./component/Molecules/IngredientItem";
+import { countMatchesFromRecipe } from "./component/common/recipeUtils";
+import { Recipe, ApiResponse } from "./component/common/typeGroup";
 
 function App() {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  //const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   const cookrcpAPI = import.meta.env.VITE_COOKRCP_API_KEY;
 
-  const [mainIngredient, setMainIngredient] = useState("");
-  const [fridgeIngredients, setFridgeIngredients] = useState([]);
-  const [dishName, setDishName] = useState("");
-  const [recipe, setRecipe] = useState([]);
-  const [newFridgeIngredient, setNewFridgeIngredient] = useState("");
-  const [selectedDish, setSelectedDish] = useState("");
-  const [searchedDishes, setSearchedDishes] = useState(['양베추볶음','부추김치','탕수육']);
+  const [mainIngredient, setMainIngredient] = useState<string>("");
+  const [fridgeIngredients, setFridgeIngredients] = useState<string[]>([]);
+  const [recipe, setRecipe] = useState<string[]>([]);
+  const [newFridgeIngredient, setNewFridgeIngredient] = useState<string>("");
+  const [selectedDish, setSelectedDish] = useState<string>("");
+  const [searchedDishes, setSearchedDishes] = useState<Map<string, Recipe>>(
+    new Map()
+  );
+  const [recipeIngredients, setRecipeIngredients] = useState<string>("");
+
 
   const fetchDishNames = async () => {
-    const prompt = `${mainIngredient}을 반드시 포함하고, 냉장고에 있는 ${fridgeIngredients.join(
-      ", "
-    )}를 많이 소비하여 만들 수 있는 요리 3개 찾아주세요. 재료들 없이 요리 이름만 한국어로 반환해주세요, 예를 들어 "검색된 요리명1, 검색된 요리명2, 검색된 요리명3"처럼 콤마로 구분하도록 해주세요.`;
-
-    try {
-      const response = await axios.post(
-        "https://api.openai.com/v1/engines/text-davinci-003/completions",
-        {
-          prompt,
-          max_tokens: 200,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-          },
-        }
-      );
-
-      const result = response.data.choices[0].text.trim();
-      setDishName(result);
-      setSearchedDishes(result.split(",").map((name: string) => name.trim()));
-      setSelectedDish(""); // 검색 시 선택된 요리명 초기화
-      setRecipe([]); // 검색 시 레시피 초기화
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  /*
-  useEffect(() => {
-    const fetchRecipe = async () => {
-      const prompt = `${selectedDish}에 대한 자세한 레시피를 알려주세요. 필요한 재료를 첫 줄에 표시하고, 그 이후 조리 방법을 순서대로 작성해주세요.`;
-
-      try {
-        const response = await axios.post(
-          "https://api.openai.com/v1/engines/text-davinci-003/completions",
-          {
-            prompt,
-            max_tokens: 1000,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-            },
-          }
-        );
-
-        const result = response.data.choices[0].text.trim().split("\n");
-        setRecipe(result);
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    if (selectedDish) {
-      fetchRecipe();
-    }
-  }, [selectedDish, apiKey]);
-
-  */
-  const fetchRecipe = async () => {
-    const url = `http://openapi.foodsafetykorea.go.kr/api/${cookrcpAPI}/COOKRCP01//xml/1/5/RCP_PARTS_DTLS=${mainIngredient}`;
-    console.log('start')
+    const url = `http://openapi.foodsafetykorea.go.kr/api/${cookrcpAPI}/COOKRCP01/json/1/50/RCP_PARTS_DTLS=${mainIngredient}`;
     try {
       const response = await fetch(url);
-      const data = await response.json();
-      const recipes = data.COOKRCP01.row;
-      const selectedRecipe = recipes[0]; // 첫 번째 레시피를 선택
-      console.log({selectedRecipe})
-      setRecipe([selectedRecipe.RECIPE_ID, selectedRecipe.RECIPE_NM_KO]); // 선택된 레시피 설정
+      const data: ApiResponse = await response.json();
+      const recipes = data.COOKRCP01?.row || [];
+
+      const recipeMap = new Map<string, Recipe>();
+      const sortedRecipes = recipes.sort((a, b) => {
+        const countA = countMatchesFromRecipe(a, fridgeIngredients);
+        const countB = countMatchesFromRecipe(b, fridgeIngredients);
+
+        return (countB || 0) - (countA || 0); // 내림차순 정렬
+      });
+
+      sortedRecipes.forEach((recipe) => {
+        if (recipe.RCP_NM) {
+          recipeMap.set(recipe.RCP_NM, recipe);
+        }
+      });
+
+      setSearchedDishes(recipeMap);
     } catch (error) {
-      console.error('에러 발생:', error);
+      console.error("에러 발생:", error);
     }
   };
 
-  const handleIngredientDelete = (index) => {
+  const handleIngredientDelete = (index: number) => {
     setFridgeIngredients((prevIngredients) =>
       prevIngredients.filter((_, i) => i !== index)
     );
   };
 
-  const handleRecipeSearch = (event) => {
+  const extractManuals = (recipe: any): string[] => {
+    let manuals: string[] = [];
+    let index = 1;
+    let manual = recipe[`MANUAL${String(index).padStart(2, "0")}`];
+
+    while (manual) {
+      manuals.push(manual);
+      index++;
+      manual = recipe[`MANUAL${String(index).padStart(2, "0")}`];
+    }
+    return manuals;
+  };
+
+  const extractIngredients = (recipe: any): string => {
+    const rawIngredients = recipe.RCP_PARTS_DTLS;
+    return rawIngredients;
+  };
+
+  const handleRecipeSearch = (event: { preventDefault: () => void }) => {
     event.preventDefault();
     // Search recipe based on the selected dish
     if (selectedDish) {
-      fetchRecipe(selectedDish);
+      const selectedRecipe = searchedDishes.get(selectedDish);
+      if (selectedRecipe) {
+        const manuals = extractManuals(selectedRecipe);
+        const ingredients = extractIngredients(selectedRecipe);
+        setRecipe(manuals);
+        setRecipeIngredients(ingredients); // 재료 저장
+      }
     }
   };
 
-  const handleFridgeIngredientSubmit = (event) => {
+  const handleFridgeIngredientSubmit = (event: {
+    key?: string;
+    preventDefault: any;
+  }) => {
     event.preventDefault();
     const ingredient = newFridgeIngredient.trim();
     if (ingredient && !fridgeIngredients.includes(ingredient)) {
@@ -115,7 +103,7 @@ function App() {
     }
   };
 
-  const handleKeyUp = (event) => {
+  const handleKeyUp = (event: { key: string; preventDefault: () => void }) => {
     if (event.key === "Enter") {
       event.preventDefault();
       handleFridgeIngredientSubmit(event);
@@ -125,42 +113,43 @@ function App() {
   return (
     <div>
       <form onSubmit={handleRecipeSearch}>
-        <label>
+        <LabelWithInput
+          type="text"
+          value={mainIngredient}
+          onChange={(e) => setMainIngredient(e.target.value)}
+        >
           우선 소비할 재료:
-          <input
-            type="text"
-            value={mainIngredient}
-            onChange={(e) => setMainIngredient(e.target.value)}
-          />
-        </label>
-        <label>
+        </LabelWithInput>
+        <LabelWithInput
+          type="text"
+          value={newFridgeIngredient}
+          onChange={(e) => setNewFridgeIngredient(e.target.value)}
+          onKeyUp={(e) => handleKeyUp(e)} // 엔터 키를 눌렀을 때 추가 기능이 작동
+        >
           냉장고의 재료:
-          <input
-            type="text"
-            value={newFridgeIngredient}
-            onChange={(e) => setNewFridgeIngredient(e.target.value)}
-            onKeyUp={handleKeyUp} // 엔터 키를 눌렀을 때 추가 기능이 작동하도록 수정
-          />
-          <button onClick={handleFridgeIngredientSubmit}>추가</button>
-        </label>
+        </LabelWithInput>
+        <Button onClick={(e) => handleFridgeIngredientSubmit(e)}>추가</Button>
+
         <ul>
           {fridgeIngredients.map((ingredient, index) => (
-            <li key={index}>
-              {ingredient}
-              <button onClick={() => handleIngredientDelete(index)}>
-                삭제
-              </button>
-            </li>
+            // TODO: key는 추후 변경필요
+            <IngredientItem
+              key={index}
+              name={ingredient}
+              onClick={() => handleIngredientDelete(index)}
+            >
+              삭제
+            </IngredientItem>
           ))}
         </ul>
-        <button onClick={fetchDishNames}> 요리 검색 </button>
+        <Button onClick={() => fetchDishNames()}> 요리 검색 </Button>
         <div>
-          {searchedDishes.length > 0 && (
+          {searchedDishes.size > 0 && (
             <div>
-              <h2>요리명 선택:</h2>
-              {searchedDishes.map((name, index) => (
-                <label key={index}>
-                  <input
+              <Label>요리명 선택:</Label>
+              {Array.from(searchedDishes.keys()).map((name, index) => (
+                <Label key={index}>
+                  <Input
                     type="radio"
                     name="selectedDish"
                     value={name}
@@ -168,19 +157,31 @@ function App() {
                     onChange={(e) => setSelectedDish(e.target.value)}
                   />
                   {name}
-                </label>
+                </Label>
               ))}
             </div>
           )}
         </div>
-        <input type="submit" value="레시피 검색하기" onClick={fetchRecipe}/>
+        {selectedDish && (
+          <Input
+            type="submit"
+            value="레시피 검색하기"
+            onClick={() => handleRecipeSearch}
+          />
+        )}
       </form>
       {selectedDish && <h2>선택된 요리명: {selectedDish}</h2>}
       {recipe.length > 0 && (
         <div>
-          <h3>레시피:</h3>
+          {recipeIngredients.length > 0 && (
+            <div>
+              <Label>요리 재료:</Label>
+              <Text>{recipeIngredients}</Text>
+            </div>
+          )}
+          <Label>레시피:</Label>
           {recipe.map((step, index) => (
-            <p key={index}>{step}</p>
+            <Label key={index}>{step}</Label>
           ))}
         </div>
       )}
